@@ -8,6 +8,8 @@ and explaining its predictions with an LLM.
 Everything runs in Docker, so the project is reproducible on any machine with Docker
 installed — no local Python/Java version juggling required.
 
+> 📘 **Learning & interview prep:** a **[from-scratch → advanced study guide](docs/MLOps_Portfolio_Study_Guide.pdf)** (~119-page PDF) explains this project *and every tool it uses* — Docker, Compose, FastAPI, scikit-learn, Kafka, Kubernetes, Terraform, LocalStack, AWS (S3/DynamoDB/Bedrock) — from zero, with a tool-by-tool interview question bank.
+
 ## Modules
 
 | Module | Focus | Runs with |
