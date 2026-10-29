@@ -21,18 +21,23 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
-          # Long initialDelay because scikit-learn's first import is slow.
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 24
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 8000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 0
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 90
+            initialDelaySeconds: 0
             periodSeconds: 15
           resources:
             requests:

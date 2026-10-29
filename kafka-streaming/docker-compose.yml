@@ -18,6 +18,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 24
+      start_period: 15s
 
   spam-api:
     build: ../serving
@@ -28,7 +34,8 @@ services:
     build: .
     command: python producer.py
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_BROKER: kafka:9092
 
@@ -36,8 +43,10 @@ services:
     build: .
     command: python consumer.py
     depends_on:
-      - kafka
-      - spam-api
+      kafka:
+        condition: service_healthy
+      spam-api:
+        condition: service_healthy
     environment:
       KAFKA_BROKER: kafka:9092
       MODEL_API: http://spam-api:8000/predict

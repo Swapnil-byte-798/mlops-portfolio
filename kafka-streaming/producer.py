@@ -3,6 +3,7 @@
 Simulates a live feed of incoming messages that need spam classification.
 """
 import json
+import argparse
 import os
 import time
 
@@ -30,6 +31,9 @@ def connect():
         try:
             return KafkaProducer(
                 bootstrap_servers=BROKER,
+                acks="all",
+                retries=5,
+                max_in_flight_requests_per_connection=1,
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
             )
         except NoBrokersAvailable:
@@ -37,18 +41,26 @@ def connect():
             time.sleep(3)
 
 
-def main():
+def main(count=0, interval=2):
     producer = connect()
     print(f"producer: connected, streaming to '{TOPIC}'", flush=True)
     i = 0
-    while True:
-        text = SAMPLES[i % len(SAMPLES)]
-        producer.send(TOPIC, {"id": i, "text": text})
-        producer.flush()
-        print(f"producer: sent #{i}: {text}", flush=True)
-        i += 1
-        time.sleep(2)
+    try:
+        while count == 0 or i < count:
+            text = SAMPLES[i % len(SAMPLES)]
+            producer.send(TOPIC, {"id": i, "text": text}).get(timeout=30)
+            print(f"producer: sent #{i}: {text}", flush=True)
+            i += 1
+            time.sleep(interval)
+    finally:
+        producer.close(timeout=10)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--count", type=int, default=0, help="0 streams forever")
+    parser.add_argument("--interval", type=float, default=2)
+    args = parser.parse_args()
+    if args.count < 0 or args.interval < 0:
+        parser.error("count and interval must be nonnegative")
+    main(args.count, args.interval)
