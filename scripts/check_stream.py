@@ -6,7 +6,7 @@ from kafka import KafkaConsumer, TopicPartition
 
 consumer = KafkaConsumer("predictions", bootstrap_servers="kafka:9092",
     auto_offset_reset="earliest", enable_auto_commit=False,
-    group_id=None, consumer_timeout_ms=120_000,
+    group_id=None, consumer_timeout_ms=120_000, metadata_max_age_ms=1000,
     value_deserializer=lambda value: json.loads(value.decode()))
 results = {}
 try:

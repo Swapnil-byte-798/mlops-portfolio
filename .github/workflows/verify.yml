@@ -46,13 +46,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose config --quiet
-      - run: docker compose up -d --build --wait kafka spam-api consumer
+      - run: docker compose up -d --build --wait kafka spam-api
+      - name: Create topics before the independent output observer starts
+        run: |
+          docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic messages --partitions 1 --replication-factor 1
+          docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic predictions --partitions 1 --replication-factor 1
+      - run: docker compose up -d --build consumer
       - run: docker compose run --rm -T producer python producer.py --count 8 --interval 0.05
       - name: Verify real broker outputs and committed offsets
         run: docker compose run --rm --no-deps -T consumer python - < ../scripts/check_stream.py
       - name: Save logs
         if: always()
-        run: docker compose logs --no-color > ../kafka.log
+        run: |
+          docker compose logs --no-color > ../kafka.log
+          docker compose logs --no-color consumer spam-api
       - run: docker compose down -v
         if: always()
       - uses: actions/upload-artifact@v4
@@ -85,6 +92,10 @@ jobs:
             sleep 2
           done
           exit 1
+      - name: Resolve signed provider checksums for supported desktop platforms
+        run: |
+          terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=windows_amd64
+          cat .terraform.lock.hcl
       - run: terraform init -input=false -lockfile=readonly
       - run: terraform fmt -check
       - run: terraform validate
