@@ -92,10 +92,6 @@ jobs:
             sleep 2
           done
           exit 1
-      - name: Resolve signed provider checksums for supported desktop platforms
-        run: |
-          terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=windows_amd64
-          cat .terraform.lock.hcl
       - run: terraform init -input=false -lockfile=readonly
       - run: terraform fmt -check
       - run: terraform validate
