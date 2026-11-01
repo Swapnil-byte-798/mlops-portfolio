@@ -1,34 +1,20 @@
-# bedrock-explainer/ — LLM explanations with AWS Bedrock
+# Optional Bedrock interpretation
 
-Adds a GenAI layer to the classifier: after the model labels a message, a
-Bedrock-hosted LLM explains *why* in plain language. This ties the project's
-Explainable-AI theme to a managed LLM.
+**Live AWS execution remains unverified.** The tests use a mocked SDK response to check request shape, response parsing and invalid-input rejection. They do not prove live access, quality or cost.
 
-> **Status: requires real AWS Bedrock access to run.**
-> This module goes on the résumé only once you have actually run it against
-> Bedrock. Until then it is intentionally left unverified — no faking.
+The CLI first requests an actual classifier prediction from the running API, then passes that label and score to Bedrock. The earlier hard-coded label/68% example has been removed. Its prompt identifies the result as a possible LLM interpretation, not measured feature attribution from logistic regression.
 
-## Prerequisites
-- An AWS account with **Amazon Bedrock** enabled.
-- **Model access** granted for the chosen model (e.g. Anthropic Claude 3 Haiku)
-  in the AWS Bedrock console, in your region.
-- Credentials configured locally (`aws configure`, an SSO profile, or env vars).
-  Never hard-code keys.
+## Run (from this directory)
 
-## Run it
+First run the serving API on host port 8767. You need an AWS account, externally configured credentials with suitable permissions, and access to your chosen Bedrock model in your region. Check the current AWS model availability for your account.
+
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 export AWS_REGION=us-east-1
 export BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
-python explain.py
+python explain.py --text 'Congratulations you won a free prize claim now'
 ```
 
-## What this demonstrates (once run)
-- Calling a managed LLM via the AWS SDK (`boto3` / `bedrock-runtime`).
-- Structuring a request/response for a hosted foundation model.
-- Composing classical ML (the classifier) with GenAI (the explainer).
+Use `--api http://localhost:8767/predict` if changing the service endpoint. Real requests may incur AWS charges. Never commit credentials.
 
-## Be able to explain (interview-ready)
-- What Amazon Bedrock is and how it differs from self-hosting a model.
-- Why credentials come from the environment, never the code.
-- Where an LLM adds value over the classifier (explanation, not classification).
+A live invocation is optional and is not part of the repository's verified all-green local/emulated checks. For faithful classifier attribution, inspect fitted text features and coefficients or evaluate an appropriate attribution method; an LLM guess is not that evidence.

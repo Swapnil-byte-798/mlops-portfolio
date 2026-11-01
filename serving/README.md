@@ -1,38 +1,23 @@
-# serving/ — Containerized ML model API (Docker)
+# Serving the spam demo
 
-A TF-IDF + Logistic Regression spam classifier served as a REST API and packaged
-as a Docker image. This is the model the rest of the repo streams, provisions for,
-and deploys.
+The image trains a TF-IDF/logistic-regression Pipeline on the committed 40-message fixture. It also writes fold metrics and artifact/data hashes to `model_metadata.json`. Five-fold evaluation fits preprocessing inside each training fold; the final serving model then fits all 40 records.
 
-## What this demonstrates
-- Writing a **Dockerfile** from a base image, layer caching, and a reproducible build.
-- Training a model at build time so the image is self-contained.
-- Serving a model behind a health-checked HTTP API (FastAPI + uvicorn).
+## Docker run (from repository root)
 
-## Run it
 ```bash
-# from the repo root
-docker build -t mlops-serving ./serving
-docker run -d -p 8000:8000 --name spam-api mlops-serving
-
-# health check
-curl http://localhost:8000/health
-
-# prediction
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Congratulations you won a free prize claim now"}'
-
-# stop it
+docker build -t mlops-serving:latest serving
+docker run -d -p 8767:8000 --name spam-api mlops-serving:latest
+curl http://localhost:8767/ready
+curl -X POST http://localhost:8767/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"free prize claim now"}'
 docker rm -f spam-api
 ```
 
-> **Note:** the first `/predict` after startup can take ~40s while scikit-learn
-> loads for the first time (slower on some machines); every call after that is
-> instant. `/health` is always fast because model loading is lazy.
+For a Python-only run, use the [root README](../README.md). The model loads once in each process's startup lifespan. There is no promised 40-second first-request delay; measure your environment.
 
-## Be able to explain (interview-ready)
-- Why we install `requirements.txt` before copying source (build-cache layering).
-- The difference between `EXPOSE` and `-p` (documentation vs. actual port publishing).
-- Why the API binds to `0.0.0.0` instead of `127.0.0.1` inside a container.
-- What `/health` is for (container/orchestrator liveness probes).
+`/health` checks process liveness; `/ready` requires a loaded model. Docker health uses readiness. A failed load leaves readiness and prediction at 503 until the artifact is fixed and the process restarts. Only load trusted joblib artifacts.
+
+Requests require one nonblank string, at most 10,000 characters; extra fields are rejected. Unknown tokens get a warning. The returned probability is uncalibrated. This is a demo API with no production authentication, rate limiting or model-quality guarantee.
+
+See [verification](../docs/verification.md) and [study material](../docs/README.md).

@@ -1,40 +1,32 @@
-# kafka-streaming/ — Real-time inference pipeline (Kafka)
+# Kafka inference
 
-A streaming pipeline that classifies messages as they arrive:
+A real single-node Apache Kafka broker runs in KRaft mode. The producer writes to `messages`; the consumer calls the model API and writes to `predictions`. Clients use container-network address `kafka:9092`; this is not a configured host-client listener.
 
-```
-producer ──► [messages topic] ──► consumer ──► POST /predict ──► [predictions topic]
-                                     │                              │
-                                 (Kafka)                     spam-api (serving)
-```
+## Run (from this directory)
 
-- **producer** publishes a stream of messages to the `messages` topic.
-- **consumer** reads each message, calls the serving API for a prediction, and
-  publishes the result to the `predictions` topic.
-- **kafka** runs as a single-node broker in **KRaft mode** (no ZooKeeper).
-
-## What this demonstrates
-- Running Kafka in Docker (KRaft mode) and configuring listeners/advertised listeners.
-- Producer/consumer clients with consumer groups and offset management.
-- Decoupling a streaming layer from a model service so they scale independently.
-
-## Run it
 ```bash
-# from this folder
 docker compose up --build
-
-# in another terminal, watch predictions flowing:
-docker compose logs -f consumer
 ```
-The first predictions take ~1–2 minutes to appear (Kafka boot + the model API's
-slow first import). Stop everything with:
+
+Broker and API health checks gate dependent startup. The default producer streams eight demonstration texts repeatedly. To run the finite acceptance scenario:
+
 ```bash
-docker compose down
+docker compose up -d --build --wait kafka spam-api
+docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic messages --partitions 1 --replication-factor 1
+docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic predictions --partitions 1 --replication-factor 1
+docker compose up -d --build consumer
+docker compose run --rm -T producer python producer.py --count 8 --interval 0.05
+docker compose run --rm --no-deps -T consumer python - < ../scripts/check_stream.py
+docker compose logs consumer
+docker compose down -v
 ```
 
-## Be able to explain (interview-ready)
-- What KRaft mode is and why it replaces ZooKeeper.
-- The difference between `KAFKA_LISTENERS` and `KAFKA_ADVERTISED_LISTENERS`, and
-  why containers must advertise `kafka:9092` (not `localhost`).
-- What a consumer group and `auto_offset_reset=earliest` do.
-- Why inference lives in a separate service instead of inside the consumer.
+Use a fresh isolated stack for this check; retained offsets/messages from an earlier infinite producer change the scenario. The acceptance script reads all eight real output records, checks their labels and verifies committed input offsets.
+
+## Delivery and failures
+
+Automatic input commits are disabled. The consumer waits for `send(...).get(...)` to confirm the output, then commits the exact input partition at offset + 1. This is **at least once**: a crash between output acknowledgement and input commit can duplicate the output. Stable `event_id` values support future deduplication; no deduplicating sink is implemented.
+
+Temporary network/429/5xx failures are retried up to three times. Permanent 4xx errors propagate immediately. Invalid records or persistent failures stop the consumer without committing that record. There is no dead-letter queue or automatic poison-record recovery. A single broker and replication factor one do not demonstrate distributed durability.
+
+The Python client now supports the checked Python 3.11/3.12 environments. See [study material](../docs/README.md) for offsets, groups and listener explanations.

@@ -1,37 +1,32 @@
-# terraform-localstack/ — Infrastructure as Code (Terraform)
+# Terraform and LocalStack
 
-Provisions cloud infrastructure for the ML system — an **S3 bucket** for model
-artifacts and a **DynamoDB table** for predictions — using Terraform against
-**LocalStack**, a local AWS emulator. No AWS account or credentials required, so
-you run a real `terraform apply` end to end.
+This independent exercise creates S3 bucket `mlops-model-artifacts` and DynamoDB table `predictions` (string key `id`, on-demand capacity) in a local AWS emulator. The serving and Kafka modules do not upload artifacts to this bucket or store predictions in this table.
 
-## What this demonstrates
-- Authoring Terraform: providers, resources, outputs, version constraints.
-- The core IaC loop: `init` → `plan` → `apply` → `destroy`.
-- Pointing a provider at a custom endpoint (LocalStack) — the same technique used
-  to target different AWS accounts/regions.
+## Run (from this directory)
 
-## Run it
+Requirements: Docker Compose and Terraform >= 1.5. The CI check uses Terraform 1.9.8 and the locked AWS provider 5.100.0.
+
 ```bash
-# 1. start LocalStack
 docker compose up -d
-
-# 2. provision
+# Wait until http://localhost:4566/_localstack/health responds.
 terraform init
-terraform plan
-terraform apply -auto-approve
-
-# 3. verify the resources really exist in LocalStack
-aws --endpoint-url=http://localhost:4566 s3 ls
-aws --endpoint-url=http://localhost:4566 dynamodb list-tables --region us-east-1
-
-# 4. tear down
-terraform destroy -auto-approve
-docker compose down
+terraform validate
+terraform plan -out=plan.tfplan
+terraform apply plan.tfplan
+docker compose exec -T localstack awslocal s3api head-bucket --bucket mlops-model-artifacts
+docker compose exec -T localstack awslocal dynamodb describe-table --table-name predictions
+terraform plan -detailed-exitcode
 ```
 
-## Be able to explain (interview-ready)
-- What `terraform init`, `plan`, and `apply` each do.
-- Why state matters and what `terraform.tfstate` holds.
-- The difference between `PAY_PER_REQUEST` and provisioned DynamoDB capacity.
-- How the `endpoints` block retargets the provider (real AWS vs. LocalStack).
+A no-change plan exits 0; a proposed change exits 2. The provider has local endpoints and dummy test credentials, not a real AWS account. Keep state and real credentials out of Git.
+
+For a deliberate provider-lock refresh across the supported desktop platforms, use `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=windows_amd64` and review the signed provider/checksum output. Do not disable checksum validation.
+
+Destroy only this exercise's isolated resources when finished:
+
+```bash
+terraform destroy
+docker compose down -v
+```
+
+Passing LocalStack checks demonstrates an emulated lifecycle, not an AWS deployment or a Terraform-managed Kubernetes cluster. See [verification](../docs/verification.md).
